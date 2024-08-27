@@ -1,18 +1,21 @@
-const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-const analyser = audioContext.createAnalyser();
-analyser.fftSize = 256;
-const bufferLength = analyser.frequencyBinCount;
-const dataArray = new Uint8Array(bufferLength);
+import { createAudioContext, createOscillator, createGain, connectNodes } from 'https://lsong.org/scripts/audio.js';
 
-const gainNode = audioContext.createGain();
-gainNode.connect(audioContext.destination);
-gainNode.connect(analyser);
+const audioContext = createAudioContext();
+const analyser = audioContext.createAnalyser();
+
+document.addEventListener('DOMContentLoaded', () => {
+  const spectrumAnalyzer = document.querySelector('spectrum-analyzer');
+  spectrumAnalyzer.setAnalyser(analyser);
+})
+
+const mainGain = createGain(audioContext, { initialGain: 1 });
+connectNodes(mainGain, audioContext.destination);
+connectNodes(mainGain, analyser);
 
 const volumeControl = document.getElementById('volume');
 const bpmControl = document.getElementById('bpm');
 const bpmValue = document.getElementById('bpmValue');
 const padGrid = document.getElementById('padGrid');
-const loopVisualization = document.getElementById('loopVisualization');
 const loopToggle = document.getElementById('loopToggle');
 const pauseLoop = document.getElementById('pauseLoop');
 const resetLoop = document.getElementById('resetLoop');
@@ -26,26 +29,26 @@ let loopSequence = [];
 let currentStep = 0;
 
 const sounds = [
-  { name: 'Kick', color: '#FF5252' },
-  { name: 'Snare', color: '#FF4081' },
-  { name: 'Hi-Hat', color: '#E040FB' },
-  { name: 'Clap', color: '#7C4DFF' },
-  { name: 'Tom', color: '#536DFE' },
-  { name: 'Cymbal', color: '#448AFF' },
-  { name: 'Cowbell', color: '#40C4FF' },
-  { name: 'Rimshot', color: '#18FFFF' },
-  { name: 'Shaker', color: '#64FFDA' },
-  { name: 'Wood', color: '#69F0AE' },
-  { name: 'Tri', color: '#B2FF59' },
-  { name: 'Tamb', color: '#EEFF41' },
-  { name: 'Conga', color: '#FFFF00' },
-  { name: 'Bongo', color: '#FFD740' },
-  { name: 'Vslap', color: '#FFAB40' },
+  { name: 'Kick', color: '#FF5252', freq: 60 },
+  { name: 'Snare', color: '#FF4081', freq: 150 },
+  { name: 'Hi-Hat', color: '#E040FB', freq: 800 },
+  { name: 'Clap', color: '#7C4DFF', freq: 300 },
+  { name: 'Tom', color: '#536DFE', freq: 100 },
+  { name: 'Cymbal', color: '#448AFF', freq: 1000 },
+  { name: 'Cowbell', color: '#40C4FF', freq: 600 },
+  { name: 'Rimshot', color: '#18FFFF', freq: 400 },
+  { name: 'Shaker', color: '#64FFDA', freq: 1200 },
+  { name: 'Wood', color: '#69F0AE', freq: 500 },
+  { name: 'Tri', color: '#B2FF59', freq: 700 },
+  { name: 'Tamb', color: '#EEFF41', freq: 900 },
+  { name: 'Conga', color: '#FFFF00', freq: 200 },
+  { name: 'Bongo', color: '#FFD740', freq: 250 },
+  { name: 'Vslap', color: '#FFAB40', freq: 350 },
   { name: 'Silent', color: '#333333', silent: true }
 ];
 
 volumeControl.addEventListener('input', () => {
-  gainNode.gain.setValueAtTime(volumeControl.value, audioContext.currentTime);
+  mainGain.gain.setValueAtTime(volumeControl.value, audioContext.currentTime);
 });
 
 bpmControl.addEventListener('input', () => {
@@ -69,20 +72,17 @@ sounds.forEach((sound, index) => {
 function playSound(index) {
   const sound = sounds[index];
   if (!sound.silent) {
-    const oscillator = audioContext.createOscillator();
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(200 + index * 100, audioContext.currentTime);
+    const osc = createOscillator(audioContext, { frequency: sound.freq, type: 'sine' });
+    const envelope = createGain(audioContext, { initialGain: 0 });
 
-    const envelope = audioContext.createGain();
     envelope.gain.setValueAtTime(0, audioContext.currentTime);
     envelope.gain.linearRampToValueAtTime(1, audioContext.currentTime + 0.01);
     envelope.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
 
-    oscillator.connect(envelope);
-    envelope.connect(gainNode);
+    connectNodes(osc, envelope, mainGain);
 
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.5);
+    osc.start();
+    osc.stop(audioContext.currentTime + 0.5);
   }
   addToSequence(index);
 }
@@ -90,29 +90,12 @@ function playSound(index) {
 function addToSequence(index) {
   if (isRecording && loopSequence.length < 16) {
     loopSequence.push(index);
-    updateLoopVisualization();
   }
 }
 
 function removeFromSequence(index) {
   if (isRecording && !isLooping) {
     loopSequence.splice(index, 1);
-    updateLoopVisualization();
-  }
-}
-
-function updateLoopVisualization() {
-  loopVisualization.innerHTML = '';
-  for (let i = 0; i < 16; i++) {
-    const stepElement = document.createElement('div');
-    stepElement.className = 'loop-step';
-    if (i < loopSequence.length) {
-      stepElement.style.backgroundColor = sounds[loopSequence[i]].color;
-      stepElement.addEventListener('click', () => removeFromSequence(i));
-    } else {
-      stepElement.style.backgroundColor = '#333';
-    }
-    loopVisualization.appendChild(stepElement);
   }
 }
 
@@ -153,7 +136,6 @@ loopToggle.addEventListener('click', () => {
       isRecording = false;
     }
   }
-  updateLoopVisualization();
 });
 
 pauseLoop.addEventListener('click', () => {
@@ -163,7 +145,6 @@ pauseLoop.addEventListener('click', () => {
 
 resetLoop.addEventListener('click', () => {
   loopSequence = [];
-  updateLoopVisualization();
   clearInterval(loopInterval);
   isLooping = false;
   isPaused = false;
@@ -176,43 +157,4 @@ resetLoop.addEventListener('click', () => {
 
 randomize.addEventListener('click', () => {
   loopSequence = Array.from({ length: 16 }, () => Math.floor(Math.random() * sounds.length));
-  updateLoopVisualization();
 });
-
-function drawVisualizer() {
-  const canvas = document.getElementById('visualizer');
-  const ctx = canvas.getContext('2d');
-  canvas.width = canvas.offsetWidth;
-  canvas.height = canvas.offsetHeight;
-  const width = canvas.width;
-  const height = canvas.height;
-
-  function draw() {
-    requestAnimationFrame(draw);
-
-    analyser.getByteFrequencyData(dataArray);
-
-    ctx.fillStyle = 'rgb(44, 44, 44)';
-    ctx.fillRect(0, 0, width, height);
-
-    const barWidth = (width / bufferLength) * 2.5;
-    let x = 0;
-
-    for (let i = 0; i < bufferLength; i++) {
-      const barHeight = (dataArray[i] / 255) * height;
-
-      ctx.fillStyle = 'rgb(255, 50, 50)';
-      ctx.fillRect(x, height - barHeight, barWidth, barHeight);
-
-      x += barWidth + 1;
-    }
-  }
-
-  draw();
-}
-
-drawVisualizer();
-window.addEventListener('resize', drawVisualizer);
-
-// Initial setup
-updateLoopVisualization();

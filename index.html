@@ -19,6 +19,7 @@
   <link rel="apple-touch-icon" sizes="128x128" type="image/png" href="https://lsong.org/icon-x128.png">
   <link rel="apple-touch-icon" sizes="512x512" type="image/png" href="https://lsong.org/icon-x512.png">
   <link rel="stylesheet" href="index.css">
+  <script src="https://lsong.org/scripts/components/spectrum-analyzer.js"></script>
   <script type="module" src="index.js"></script>
 </head>
 
@@ -38,7 +39,7 @@
         <span id="bpmValue">120</span>
       </div>
     </div>
-    <canvas id="visualizer"></canvas>
+    <spectrum-analyzer id="visualizer" fft-size="64"></spectrum-analyzer>
     <div class="button-container">
       <button id="loopToggle" class="control-button">Start</button>
       <button id="pauseLoop" class="control-button">Pause</button>
